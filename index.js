@@ -1,29 +1,43 @@
-import express from "express";
-import cors from "cors";
-
+const express = require("express");
+const cors = require("cors");
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-// Login de teste
-const users = [
-  { numero: "180939", password: "andres91" },
-  { numero: "654321", password: "senha456" }
+// Endpoint de teste
+app.get("/", (req, res) => {
+  res.send("API do Guarda-Freios a funcionar 🚂");
+});
+
+// Lista de utilizadores válidos
+const utilizadores = [
+  { numero: "180939", password: "andres91", tipo: "Tripulante+" },
+  { numero: "18001", password: "1234", tipo: "Tripulante+" },
+  { numero: "18003", password: "4321", tipo: "Tripulante" },
+  { numero: "teste", password: "teste", tipo: "Tripulante" },
 ];
 
+// Endpoint de login
 app.post("/login", (req, res) => {
-  const { numero, password } = req.body;
-  const user = users.find(
-    (u) => u.numero === numero && u.password === password
+  const { user, pass } = req.body;
+
+  const encontrado = utilizadores.find(
+    (u) => u.numero === user && u.password === pass
   );
 
-  if (user) {
-    res.json({ success: true, token: "fake-jwt-token-123" });
+  if (encontrado) {
+    res.json({
+      success: true,
+      message: "Login OK",
+      numero: encontrado.numero,
+      tipo: encontrado.tipo,
+    });
   } else {
-    res.json({ success: false });
+    res.status(401).json({ success: false, message: "Credenciais inválidas" });
   }
 });
 
-// 🚀 Porta dinâmica obrigatória para Railway
+// Porta do Railway
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`API a correr na porta ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor a correr na porta ${PORT}`));
