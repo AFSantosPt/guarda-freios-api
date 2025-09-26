@@ -7,7 +7,7 @@ app.use(express.json());
 
 // Login de teste
 const users = [
-  { numero: "123456", password: "teste123" },
+  { numero: "180939", password: "andres91" },
   { numero: "654321", password: "senha456" }
 ];
 
