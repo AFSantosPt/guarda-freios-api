@@ -2,11 +2,11 @@
   "name": "guarda-freios-backend",
   "version": "2.0.0",
   "description": "Backend API para sistema de gestão de elétricos de Lisboa",
-  "main": "src/server.js",
+  "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "start": "node index.js",
+    "dev": "node --watch index.js"
   },
   "keywords": ["carris", "eletricos", "gps", "tracking", "lisboa"],
   "author": "Guarda-Freios Team",
@@ -20,6 +20,6 @@
     "ws": "^8.14.2"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "22.x"
   }
 }
