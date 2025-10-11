@@ -164,6 +164,143 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// PUT /api/auth/users/:id
+app.put('/api/auth/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nome, email, cargo, password } = req.body;
+
+    if (!nome || !email || !cargo) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nome, email e cargo são obrigatórios'
+      });
+    }
+
+    // Verificar se o utilizador existe
+    const userCheck = await pool.query(
+      'SELECT id FROM utilizadores WHERE id = $1',
+      [id]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Utilizador não encontrado'
+      });
+    }
+
+    // Verificar se o email já existe em outro utilizador
+    const emailCheck = await pool.query(
+      'SELECT id FROM utilizadores WHERE email = $1 AND id != $2',
+      [email, id]
+    );
+
+    if (emailCheck.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Email já está em uso por outro utilizador'
+      });
+    }
+
+    // Atualizar utilizador
+    let query, params;
+    if (password && password.length >= 6) {
+      // Atualizar com nova password
+      query = `UPDATE utilizadores 
+               SET nome = $1, email = $2, cargo = $3, password_hash = $4, updated_at = NOW() 
+               WHERE id = $5 
+               RETURNING id, numero, nome, email, cargo`;
+      params = [nome, email, cargo, password, id];
+    } else {
+      // Atualizar sem alterar password
+      query = `UPDATE utilizadores 
+               SET nome = $1, email = $2, cargo = $3, updated_at = NOW() 
+               WHERE id = $4 
+               RETURNING id, numero, nome, email, cargo`;
+      params = [nome, email, cargo, id];
+    }
+
+    const result = await pool.query(query, params);
+    const updatedUser = result.rows[0];
+
+    res.json({
+      success: true,
+      message: 'Utilizador atualizado com sucesso',
+      user: updatedUser
+    });
+
+  } catch (error) {
+    console.error('Erro ao atualizar utilizador:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro no servidor ao atualizar utilizador'
+    });
+  }
+});
+
+// DELETE /api/auth/users/:id
+app.delete('/api/auth/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verificar se o utilizador existe
+    const userCheck = await pool.query(
+      'SELECT id, numero, nome FROM utilizadores WHERE id = $1',
+      [id]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Utilizador não encontrado'
+      });
+    }
+
+    // Desativar utilizador em vez de excluir (soft delete)
+    await pool.query(
+      'UPDATE utilizadores SET ativo = false, updated_at = NOW() WHERE id = $1',
+      [id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Utilizador desativado com sucesso'
+    });
+
+  } catch (error) {
+    console.error('Erro ao excluir utilizador:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro no servidor ao excluir utilizador'
+    });
+  }
+});
+
+// GET /api/auth/users
+app.get('/api/auth/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, numero, nome, email, cargo, ativo, created_at 
+       FROM utilizadores 
+       WHERE ativo = true 
+       ORDER BY nome ASC`
+    );
+
+    res.json({
+      success: true,
+      users: result.rows
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar utilizadores:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro no servidor ao buscar utilizadores'
+    });
+  }
+});
+
 // POST /api/auth/change-password
 app.post('/api/auth/change-password', async (req, res) => {
   try {
