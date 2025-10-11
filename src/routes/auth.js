@@ -134,5 +134,85 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
+// POST /api/auth/register
+router.post('/register', async (req, res) => {
+  try {
+    const { numero, nome, email, cargo, password } = req.body;
+
+    // Validações
+    if (!numero || !nome || !email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Todos os campos são obrigatórios' 
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'A password deve ter pelo menos 6 caracteres' 
+      });
+    }
+
+    // Verificar se o número já existe
+    const existingUser = await pool.query(
+      'SELECT id FROM utilizadores WHERE numero = $1',
+      [numero]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({ 
+        success: false, 
+        message: 'Número de funcionário já registado' 
+      });
+    }
+
+    // Verificar se o email já existe
+    const existingEmail = await pool.query(
+      'SELECT id FROM utilizadores WHERE email = $1',
+      [email]
+    );
+
+    if (existingEmail.rows.length > 0) {
+      return res.status(409).json({ 
+        success: false, 
+        message: 'Email já registado' 
+      });
+    }
+
+    // Hash da password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Inserir novo utilizador
+    const result = await pool.query(
+      `INSERT INTO utilizadores (numero, nome, email, cargo, password_hash, ativo) 
+       VALUES ($1, $2, $3, $4, $5, true) 
+       RETURNING id, numero, nome, email, cargo`,
+      [numero, nome, email, cargo || 'Tripulante', passwordHash]
+    );
+
+    const newUser = result.rows[0];
+
+    res.status(201).json({
+      success: true,
+      message: 'Conta criada com sucesso',
+      user: {
+        id: newUser.id,
+        numero: newUser.numero,
+        nome: newUser.nome,
+        email: newUser.email,
+        cargo: newUser.cargo
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar conta:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erro no servidor ao criar conta' 
+    });
+  }
+});
+
 export default router;
 

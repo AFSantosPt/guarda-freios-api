@@ -59,7 +59,7 @@ app.post('/api/auth/login', async (req, res) => {
     const user = result.rows[0];
 
     // Verificar password (em produção, usar bcrypt)
-    if (user.password !== password) {
+    if (user.password_hash !== password) {
       return res.status(401).json({
         success: false,
         message: 'Password incorreta'
@@ -83,6 +83,83 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor'
+    });
+  }
+});
+
+// POST /api/auth/register
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { numero, nome, email, cargo, password } = req.body;
+
+    // Validações
+    if (!numero || !nome || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Todos os campos são obrigatórios'
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'A password deve ter pelo menos 6 caracteres'
+      });
+    }
+
+    // Verificar se o número já existe
+    const existingUser = await pool.query(
+      'SELECT id FROM utilizadores WHERE numero = $1',
+      [numero]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Número de funcionário já registado'
+      });
+    }
+
+    // Verificar se o email já existe
+    const existingEmail = await pool.query(
+      'SELECT id FROM utilizadores WHERE email = $1',
+      [email]
+    );
+
+    if (existingEmail.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Email já registado'
+      });
+    }
+
+    // Inserir novo utilizador (em produção, usar bcrypt para hash)
+    const result = await pool.query(
+      `INSERT INTO utilizadores (numero, nome, email, cargo, password_hash, ativo) 
+       VALUES ($1, $2, $3, $4, $5, true) 
+       RETURNING id, numero, nome, email, cargo`,
+      [numero, nome, email, cargo || 'Tripulante', password]
+    );
+
+    const newUser = result.rows[0];
+
+    res.status(201).json({
+      success: true,
+      message: 'Conta criada com sucesso',
+      user: {
+        id: newUser.id,
+        numero: newUser.numero,
+        nome: newUser.nome,
+        email: newUser.email,
+        cargo: newUser.cargo
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao criar conta:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro no servidor ao criar conta'
     });
   }
 });
@@ -114,7 +191,7 @@ app.post('/api/auth/change-password', async (req, res) => {
 
     const user = result.rows[0];
 
-    if (user.password !== currentPassword) {
+    if (user.password_hash !== currentPassword) {
       return res.status(401).json({
         success: false,
         message: 'Password atual incorreta'
@@ -123,7 +200,7 @@ app.post('/api/auth/change-password', async (req, res) => {
 
     // Atualizar password
     await pool.query(
-      'UPDATE utilizadores SET password = $1, updated_at = NOW() WHERE numero = $2',
+      'UPDATE utilizadores SET password_hash = $1, updated_at = NOW() WHERE numero = $2',
       [newPassword, numero]
     );
 
