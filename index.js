@@ -788,6 +788,136 @@ app.delete('/api/servicos/:id', async (req, res) => {
 });
 
 // ==========================================
+// ==========================================
+// ORDENS DE SERVIÇO
+// ==========================================
+
+// GET /api/ordens - Listar todas as ordens ativas
+app.get("/api/ordens", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT 
+        o.*,
+        u.nome as criador_nome,
+        u.cargo as criador_cargo
+       FROM ordens_servico o
+       LEFT JOIN utilizadores u ON o.criado_por = u.id
+       WHERE o.ativo = true AND (o.expira_em IS NULL OR o.expira_em > NOW())
+       ORDER BY o.created_at DESC`
+    );
+
+    res.json({
+      success: true,
+      ordens: result.rows
+    });
+
+  } catch (error) {
+    console.error("Erro ao buscar ordens:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro no servidor"
+    });
+  }
+});
+
+// POST /api/ordens - Criar nova ordem (apenas Gestores)
+app.post("/api/ordens", async (req, res) => {
+  try {
+    const {
+      criado_por,
+      assunto,
+      descricao,
+      ficheiro_url,
+      ficheiro_nome,
+      tempo_expiracao
+    } = req.body;
+
+    if (!criado_por || !assunto || !descricao) {
+      return res.status(400).json({
+        success: false,
+        message: "Criado_por, assunto e descrição são obrigatórios"
+      });
+    }
+
+    let expira_em = null;
+    if (tempo_expiracao && tempo_expiracao > 0) {
+      expira_em = new Date();
+      expira_em.setHours(expira_em.getHours() + parseInt(tempo_expiracao));
+    }
+
+    const result = await pool.query(
+      `INSERT INTO ordens_servico 
+       (criado_por, assunto, descricao, ficheiro_url, ficheiro_nome, expira_em) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
+       RETURNING *`,
+      [criado_por, assunto, descricao, ficheiro_url, ficheiro_nome, expira_em]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Ordem de serviço criada com sucesso",
+      ordem: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Erro ao criar ordem:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro no servidor"
+    });
+  }
+});
+
+// DELETE /api/ordens/:id - Excluir ordem (apenas Gestores)
+app.delete("/api/ordens/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user_id } = req.query;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id é obrigatório"
+      });
+    }
+
+    const result = await pool.query(
+      "UPDATE ordens_servico SET ativo = false, updated_at = NOW() WHERE id = $1 RETURNING *",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Ordem não encontrada"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Ordem excluída com sucesso"
+    });
+
+  } catch (error) {
+    console.error("Erro ao excluir ordem:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro no servidor"
+    });
+  }
+});
+
+setInterval(async () => {
+  try {
+    await pool.query(
+      "UPDATE ordens_servico SET ativo = false WHERE expira_em IS NOT NULL AND expira_em < NOW() AND ativo = true"
+    );
+  } catch (error) {
+    console.error("Erro ao limpar ordens expiradas:", error);
+  }
+}, 60000);
+
+// ==========================================
 // HEALTH CHECK
 // ==========================================
 
