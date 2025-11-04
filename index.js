@@ -468,6 +468,116 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
+// ROTAS DE ORDENS DE SERVIÇO
+// ==========================================
+
+// POST /api/ordens
+app.post('/api/ordens', authenticateToken, async (req, res) => {
+  try {
+    // 4️⃣ GESTÃO DE ORDENS DE SERVIÇO
+    // Permitir que gestores adicionem: Campo “Assunto”, Upload de ficheiros (PDF, DOCX, imagens), Campo “Tempo estimado da ordem de serviço”
+    if (req.user.cargo !== 'Gestor') {
+      return res.status(403).json({ success: false, message: 'Apenas gestores podem criar ordens de serviço' });
+    }
+
+    const { assunto, tempo_estimado, ficheiros } = req.body; // ficheiros será um array de URLs após upload no frontend
+
+    if (!assunto || !tempo_estimado) {
+      return res.status(400).json({ success: false, message: 'Assunto e tempo estimado são obrigatórios' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO ordens_servico (assunto, tempo_estimado, ficheiros, criado_por) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING *`,
+      [assunto, tempo_estimado, ficheiros || [], req.user.id]
+    );
+
+    res.status(201).json({ success: true, ordem: result.rows[0] });
+
+  } catch (error) {
+    console.error('Erro ao criar ordem de serviço:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+  }
+});
+
+// GET /api/ordens
+app.get('/api/ordens', authenticateToken, async (req, res) => {
+  try {
+    // Tornar as ordens visíveis a todos os utilizadores.
+    const result = await pool.query(
+      `SELECT os.*, u.nome as criado_por_nome 
+       FROM ordens_servico os
+       JOIN utilizadores u ON os.criado_por = u.id
+       ORDER BY os.criado_em DESC`
+    );
+
+    res.json({ success: true, ordens: result.rows });
+
+  } catch (error) {
+    console.error('Erro ao buscar ordens de serviço:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+  }
+});
+
+// ==========================================
+// ROTAS DE AVARIAS
+// ==========================================
+
+// POST /api/avariass
+app.post('/api/avariass', authenticateToken, async (req, res) => {
+  try {
+    // 3️⃣ GESTÃO DE AVARIAS
+    // Trocar o campo “Chapa” por “Nº Veículo”.
+    const { numero_veiculo, descricao, ficheiros } = req.body; // ficheiros será um array de URLs após upload no frontend
+
+    if (!numero_veiculo || !descricao) {
+      return res.status(400).json({ success: false, message: 'Número do veículo e descrição são obrigatórios' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO avarias (numero_veiculo, descricao, ficheiros, reportado_por) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING *`,
+      [numero_veiculo, descricao, ficheiros || [], req.user.id]
+    );
+
+    res.status(201).json({ success: true, avaria: result.rows[0] });
+
+  } catch (error) {
+    console.error('Erro ao reportar avaria:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+  }
+});
+
+// DELETE /api/avariass/:id
+app.delete('/api/avariass/:id', authenticateToken, async (req, res) => {
+  try {
+    // Apenas gestores podem apagar avarias
+    if (req.user.cargo !== 'Gestor') {
+      return res.status(403).json({ success: false, message: 'Apenas gestores podem apagar avarias' });
+    }
+
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM avarias WHERE id = $1 RETURNING id',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Avaria não encontrada' });
+    }
+
+    res.json({ success: true, message: 'Avaria apagada com sucesso' });
+
+  } catch (error) {
+    console.error('Erro ao apagar avaria:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+  }
+});
+
+// ==========================================
 // ROTAS DE GPS
 // ==========================================
 
