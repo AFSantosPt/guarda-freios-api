@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require("express");
+const jwt = require('jsonwebtoken');
 const cors = require("cors");
 const { Pool } = require('pg');
 
@@ -11,6 +12,20 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Middleware de autenticação JWT
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) return res.sendStatus(401); // Sem token
+
+  jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret', (err, user) => {
+    if (err) return res.sendStatus(403); // Token inválido ou expirado
+    req.user = user;
+    next();
+  });
+};
 
 // PostgreSQL Pool
 const pool = new Pool({
@@ -32,6 +47,7 @@ pool.query('SELECT NOW()', (err, res) => {
 // ==========================================
 
 // POST /api/auth/login
+// 🔐 1️⃣ LOGIN - Adicionar mensagem de erro clara: “Utilizador ou senha inválidos”
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { numero, password } = req.body;
@@ -62,13 +78,21 @@ app.post('/api/auth/login', async (req, res) => {
     if (user.password_hash !== password) {
       return res.status(401).json({
         success: false,
-        message: 'Password incorreta'
+        message: 'Utilizador ou senha inválidos' // Mensagem de erro clara
       });
     }
+
+    // Gerar JWT
+    const token = jwt.sign(
+      { id: user.id, numero: user.numero, cargo: user.cargo },
+      process.env.JWT_SECRET || 'your_jwt_secret', // Usar variável de ambiente
+      { expiresIn: '1d' } // Token expira em 1 dia
+    );
 
     // Login bem-sucedido
     res.json({
       success: true,
+      token: token,
       user: {
         id: user.id,
         numero: user.numero,
@@ -165,7 +189,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // PUT /api/auth/users/:id
-app.put('/api/auth/users/:id', async (req, res) => {
+app.put('/api/auth/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, email, cargo, password } = req.body;
@@ -240,7 +264,7 @@ app.put('/api/auth/users/:id', async (req, res) => {
 });
 
 // DELETE /api/auth/users/:id
-app.delete('/api/auth/users/:id', async (req, res) => {
+app.delete('/api/auth/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -278,7 +302,7 @@ app.delete('/api/auth/users/:id', async (req, res) => {
 });
 
 // GET /api/auth/users
-app.get('/api/auth/users', async (req, res) => {
+app.get('/api/auth/users', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, numero, nome, email, cargo, ativo, created_at 
@@ -302,7 +326,7 @@ app.get('/api/auth/users', async (req, res) => {
 });
 
 // POST /api/auth/change-password
-app.post('/api/auth/change-password', async (req, res) => {
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
   try {
     const { numero, currentPassword, newPassword } = req.body;
 
@@ -320,9 +344,9 @@ app.post('/api/auth/change-password', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
-        message: 'Utilizador não encontrado'
+        message: 'Utilizador ou senha inválidos'
       });
     }
 
@@ -331,7 +355,7 @@ app.post('/api/auth/change-password', async (req, res) => {
     if (user.password_hash !== currentPassword) {
       return res.status(401).json({
         success: false,
-        message: 'Password atual incorreta'
+        message: 'Utilizador ou senha inválidos'
       });
     }
 
