@@ -302,6 +302,94 @@ app.delete('/api/auth/users/:id', authenticateToken, async (req, res) => {
 });
 
 // GET /api/auth/users
+// 🌍 7️⃣ ATUALIZAÇÃO AUTOMÁTICA DOS TRAJETOS (Carris)
+// Implementar cache (24h) e CRON job diário às 03:00 (hora Lisboa) para atualizar todos os trajetos.
+const axios = require('axios');
+const cheerio = require('cheerio');
+const cron = require('node-cron');
+
+// Estrutura de cache para trajetos (simulação)
+const trajetosCache = {};
+
+// Função de scraping
+async function scrapeTrajeto(carreira) {
+  const url = `https://www.carris.pt/viaje/carreiras/${carreira}/`;
+  try {
+    const response = await axios.get(url);
+    const $ = cheerio.load(response.data);
+
+    const nomeCompleto = $('.page-title').text().trim();
+    const descricao = $('.page-description').text().trim();
+    const paragens = [];
+    $('.stop-list li').each((i, el) => {
+      paragens.push($(el).text().trim());
+    });
+    // Simulação de URL do mapa (o scraping real é complexo)
+    const mapaUrl = `https://www.carris.pt/mapa-${carreira}.png`; 
+
+    const trajeto = {
+      carreira: carreira,
+      descricao: nomeCompleto,
+      paragens: paragens,
+      mapaUrl: mapaUrl,
+      ultimaAtualizacao: new Date().toISOString()
+    };
+
+    // Guardar na cache (simulação de guardar na DB)
+    trajetosCache[carreira] = trajeto;
+    return trajeto;
+
+  } catch (error) {
+    console.error(`Erro ao fazer scraping da carreira ${carreira}:`, error.message);
+    return null;
+  }
+}
+
+// CRON job diário às 03:00 (hora Lisboa)
+cron.schedule('0 0 3 * * *', async () => {
+  console.log('A executar CRON job: Atualização automática dos trajetos da Carris...');
+  // Lista de carreiras a atualizar (exemplo)
+  const carreiras = ['12E', '28E', '736']; 
+  for (const carreira of carreiras) {
+    await scrapeTrajeto(carreira);
+  }
+  console.log('CRON job concluído.');
+}, {
+  timezone: "Europe/Lisbon"
+});
+
+// Endpoint GET /api/trajetos/atualizar/:carreira
+app.get('/api/trajetos/atualizar/:carreira', authenticateToken, async (req, res) => {
+  const { carreira } = req.params;
+
+  // 1. Verificar cache (24h)
+  const cacheEntry = trajetosCache[carreira];
+  if (cacheEntry && (new Date() - new Date(cacheEntry.ultimaAtualizacao)) < 24 * 60 * 60 * 1000) {
+    return res.json({
+      success: true,
+      source: 'cache',
+      trajeto: cacheEntry
+    });
+  }
+
+  // 2. Fazer scraping
+  const trajeto = await scrapeTrajeto(carreira);
+
+  if (trajeto) {
+    res.json({
+      success: true,
+      source: 'scrape',
+      trajeto: trajeto
+    });
+  } else {
+    res.status(500).json({
+      success: false,
+      message: 'Trajeto temporariamente indisponível'
+    });
+  }
+});
+
+// GET /api/auth/users
 app.get('/api/auth/users', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
