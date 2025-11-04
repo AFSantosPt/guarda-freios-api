@@ -39,6 +39,18 @@ pool.query('SELECT NOW()', (err, res) => {
     console.error('❌ Erro ao conectar ao PostgreSQL:', err);
   } else {
     console.log('✅ PostgreSQL conectado:', res.rows[0].now);
+    
+    // Adicionar utilizador de teste 180939/andres91 (Gestor)
+    pool.query(
+      `INSERT INTO utilizadores (numero, nome, email, cargo, password_hash, ativo) 
+       VALUES ($1, $2, $3, $4, $5, true) 
+       ON CONFLICT (numero) DO NOTHING`,
+      ['180939', 'André Santos', 'afsantospt91@gmail.com', 'Gestor', 'andres91']
+    ).then(() => {
+      console.log('✅ Utilizador de teste 180939 adicionado/verificado.');
+    }).catch(err => {
+      console.error('❌ Erro ao adicionar utilizador de teste:', err);
+    });
   }
 });
 
