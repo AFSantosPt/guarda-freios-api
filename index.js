@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require("express");
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const cors = require("cors");
 const { Pool } = require('pg');
 
@@ -8,7 +9,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: '*',
+  origin: process.env.CORS_ORIGIN || 'https://guarda-freios.vercel.app',
   credentials: true
 }));
 app.use(express.json());
@@ -41,15 +42,17 @@ pool.query('SELECT NOW()', (err, res) => {
     console.log('✅ PostgreSQL conectado:', res.rows[0].now);
     
     // Adicionar utilizador de teste 180939/andres91 (Gestor)
-    pool.query(
-      `INSERT INTO utilizadores (numero, nome, email, cargo, password_hash, ativo) 
-       VALUES ($1, $2, $3, $4, $5, true) 
-       ON CONFLICT (numero) DO NOTHING`,
-      ['180939', 'André Santos', 'afsantospt91@gmail.com', 'Gestor', 'andres91']
-    ).then(() => {
-      console.log('✅ Utilizador de teste 180939 adicionado/verificado.');
-    }).catch(err => {
-      console.error('❌ Erro ao adicionar utilizador de teste:', err);
+    bcrypt.hash('andres91', 10).then(hashedPassword => {
+      pool.query(
+        `INSERT INTO utilizadores (numero, nome, email, cargo, password_hash, ativo) 
+         VALUES ($1, $2, $3, $4, $5, true) 
+         ON CONFLICT (numero) DO NOTHING`,
+        ['180939', 'André Santos', 'afsantospt91@gmail.com', 'Gestor', hashedPassword]
+      ).then(() => {
+        console.log('✅ Utilizador de teste 180939 adicionado/verificado.');
+      }).catch(err => {
+        console.error('❌ Erro ao adicionar utilizador de teste:', err);
+      });
     });
   }
 });
@@ -91,11 +94,12 @@ app.post('/api/auth/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    // Verificar password (em produção, usar bcrypt)
-    if (user.password_hash !== password) {
+    // Verificar password com bcrypt
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Utilizador ou senha inválidos' // Mensagem de erro clara
+        message: 'Utilizador ou senha inválidos'
       });
     }
 
@@ -174,12 +178,15 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    // Inserir novo utilizador (em produção, usar bcrypt para hash)
+    // Hash da password com bcrypt
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Inserir novo utilizador
     const result = await pool.query(
       `INSERT INTO utilizadores (numero, nome, email, cargo, password_hash, ativo) 
        VALUES ($1, $2, $3, $4, $5, true) 
        RETURNING id, numero, nome, email, cargo`,
-      [numero, nome, email, cargo || 'Tripulante', password]
+      [numero, nome, email, cargo || 'Tripulante', hashedPassword]
     );
 
     const newUser = result.rows[0];
@@ -247,12 +254,15 @@ app.put('/api/auth/users/:id', authenticateToken, async (req, res) => {
     // Atualizar utilizador
     let query, params;
     if (password && password.length >= 6) {
+      // Hash da nova password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
       // Atualizar com nova password
       query = `UPDATE utilizadores 
                SET nome = $1, email = $2, cargo = $3, password_hash = $4, updated_at = NOW() 
                WHERE id = $5 
                RETURNING id, numero, nome, email, cargo`;
-      params = [nome, email, cargo, password, id];
+      params = [nome, email, cargo, hashedPassword, id];
     } else {
       // Atualizar sem alterar password
       query = `UPDATE utilizadores 
