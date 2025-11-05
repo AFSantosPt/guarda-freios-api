@@ -58,6 +58,12 @@ pool.query('SELECT NOW()', (err, res) => {
 // ROTAS DE AUTENTICAÇÃO
 // ==========================================
 
+// Iniciar servidor
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor a correr na porta ${PORT}`);
+});
+
 // POST /api/auth/login
 // 🔐 1️⃣ LOGIN - Adicionar mensagem de erro clara: “Utilizador ou senha inválidos”
 app.post('/api/auth/login', async (req, res) => {
