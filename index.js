@@ -46,7 +46,9 @@ pool.query('SELECT NOW()', (err, res) => {
       pool.query(
         `INSERT INTO utilizadores (numero, nome, email, cargo, password_hash, ativo) 
          VALUES ($1, $2, $3, $4, $5, true) 
-         ON CONFLICT (numero) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+         ON CONFLICT (numero) DO UPDATE SET 
+           password_hash = EXCLUDED.password_hash,
+           cargo = EXCLUDED.cargo`,
         ['180939', 'André Santos', 'afsantospt91@gmail.com', 'Gestor', hashedPassword]
       ).then(() => {
         console.log('✅ Utilizador de teste 180939 adicionado/atualizado com password hasheada.');
