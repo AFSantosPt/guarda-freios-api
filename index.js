@@ -59,8 +59,8 @@ pool.query('SELECT NOW()', (err, res) => {
 // ==========================================
 
 // Iniciar servidor
-app.listen(process.env.PORT, () => {
-  console.log(`🚀 Servidor a correr na porta ${process.env.PORT}`);
+app.listen(process.env.PORT || 3000, () => {
+  console.log(`🚀 Servidor a correr na porta ${process.env.PORT || 3000}`);
 });
 
 // POST /api/auth/login
